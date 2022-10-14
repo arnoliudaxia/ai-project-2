@@ -537,43 +537,37 @@ def slam(problem, agent) -> Generator:
     KB.append(PropSymbolExpr(pacman_str, pac_x_0, pac_y_0, time=0))
     known_map[pac_x_0][pac_y_0] = 0
     KB.append(~PropSymbolExpr(wall_str, pac_x_0, pac_y_0))
-    walls_grid = problem.walls
 
     for t in range(agent.num_timesteps):
-        pacphy = pacphysicsAxioms(t, all_coords, non_outer_wall_coords, walls_grid, SLAMSensorAxioms,
+        pacphy = pacphysicsAxioms(t, all_coords, non_outer_wall_coords, known_map, SLAMSensorAxioms,
                                   SLAMSuccessorAxioms)
         KB.append(pacphy)
         KB.append(numAdjWallsPerceptRules(t,agent.getPercepts()))
         possible_locations = []
-        for x,y in non_outer_wall_coords:
-            trySolve = findModel(PropSymbolExpr(pacman_str,x,y,time=t)&conjoin(KB))
-            if trySolve!=False:
-                possible_locations.append((x,y))
-        for x, y in non_outer_wall_coords:
-            if known_map[x][y]==-1:
-                CanBeWall=conjoin( PropSymbolExpr(wall_str,x,y), conjoin(KB))
-                CanBeEmpty=conjoin( ~PropSymbolExpr(wall_str,x,y), conjoin(KB))
-                trySolve = findModel(CanBeWall)
-                if trySolve==False:#improssible wall
-                    known_map[x][y]=0
-                    KB.append(~PropSymbolExpr(wall_str,x,y))
-                trySolve = findModel(CanBeEmpty)
-                if trySolve==False:#improssible empty
-                    known_map[x][y]=1
-                    KB.append(PropSymbolExpr(wall_str,x,y))
-
-        agent.moveToNextState(agent.actions[t])
         KB.append(PropSymbolExpr(agent.actions[t], time=t))
 
-        # if t==5 and len(possible_locations)==3:
-        #     possible_locations.insert(1,(2,2))
-        # if t==6 and len(possible_locations)==4:
-        #     possible_locations.insert(2,(2,2))
-        #     possible_locations.insert(2,(2,1))
-        # if t==7 and len(possible_locations)==3:
-        #     possible_locations.append((3,1))
-        #     possible_locations.append((3,2))
-        #     possible_locations.append((4,3))
+        for x, y in non_outer_wall_coords:
+            if known_map[x][y]==-1:
+                CanBeWall = entails(conjoin(KB), PropSymbolExpr(wall_str, x, y))
+                CanBeEmpty = entails(conjoin(KB), ~PropSymbolExpr(wall_str, x, y))
+                if CanBeWall and not CanBeEmpty:  # improssible wall
+                    known_map[x][y] = 1
+                    KB.append(PropSymbolExpr(wall_str, x, y))
+                if CanBeEmpty and not CanBeWall:  # improssible empty
+                    known_map[x][y] = 0
+                    KB.append(~PropSymbolExpr(wall_str, x, y))
+        for x,y in non_outer_wall_coords:
+            trySolve = findModel(PropSymbolExpr(pacman_str,x,y,time=t)&conjoin(KB))
+            # CanNotBePacman = findModel(~PropSymbolExpr(pacman_str, x, y, time=t) & conjoin(KB))
+            if trySolve!=False:
+                possible_locations.append((x,y))
+            #     if CanNotBePacman==False:
+            #         KB.append(PropSymbolExpr(pacman_str, x, y, time=t))
+            # if trySolve == False and CanNotBePacman != False:
+            #     KB.append(~PropSymbolExpr(pacman_str, x, y, time=t))
+
+
+        agent.moveToNextState(agent.actions[t])
 
         yield (known_map, possible_locations)
 
